@@ -1,0 +1,13 @@
+SAB & Deluge Card is a focused Home Assistant dashboard card created by
+Travis Matzdorf.
+
+Its visual design and portions of its interaction patterns are derived from
+Arr Stack Card by martinargalas:
+https://github.com/martinargalas/ha-arr-stack-card
+
+The card uses Arr Stack Integration as its authenticated Home Assistant API
+proxy:
+https://github.com/martinargalas/arr-stack-integration
+
+Both upstream projects are licensed under the MIT License. The original
+copyright notice is retained in LICENSE and in the source header.

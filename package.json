@@ -1,0 +1,12 @@
+{
+  "name": "ha-sab-deluge-card",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A focused Home Assistant Lovelace card for SABnzbd and Deluge queues",
+  "type": "module",
+  "scripts": {
+    "check": "node --check sab-deluge-card.js",
+    "test": "node --test tests/card.test.mjs"
+  },
+  "license": "MIT"
+}
