@@ -1,6 +1,6 @@
 {
   "name": "ha-sab-deluge-card",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A focused Home Assistant Lovelace card for SABnzbd and Deluge queues",
   "type": "module",

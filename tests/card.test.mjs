@@ -79,6 +79,34 @@ vm.runInNewContext(source, sandbox, { filename: "sab-deluge-card.js" });
 const Card = registry.get("sab-deluge-card");
 const Editor = registry.get("sab-deluge-card-editor");
 
+/** Evaluate the card in a fresh browser-like context, as a <script> load would. */
+function runSource({ defineThrows = false } = {}) {
+  const defined = new Map();
+  const errors = [];
+  const context = {
+    HTMLElement: FakeHTMLElement,
+    CustomEvent: class {},
+    customElements: {
+      define(name, constructor) {
+        if (defineThrows) throw new Error(`'${name}' has already been defined`);
+        defined.set(name, constructor);
+      },
+      get(name) {
+        return defined.get(name);
+      },
+    },
+    document: { createElement: (name) => new FakeNode(name) },
+    window: {},
+    console: { info() {}, error: (...args) => errors.push(args) },
+    setInterval,
+    clearInterval,
+    setTimeout,
+    Promise,
+  };
+  vm.runInNewContext(source, context, { filename: "sab-deluge-card.js" });
+  return { context, defined, errors };
+}
+
 /** A card wired up far enough to render, with polling and network stubbed out. */
 function makeCard(overrides = {}) {
   const card = new Card();
@@ -96,6 +124,58 @@ test("registers the Home Assistant card and editor", () => {
 
 test("never requests SABnzbd history", () => {
   assert.equal(source.includes("arr_stack/sabnzbd/history"), false);
+});
+
+test("announces itself to the dashboard card picker", () => {
+  const { context, defined } = runSource();
+
+  // This entry is what makes the card selectable under "Add card".
+  assert.equal(context.window.customCards.length, 1);
+  const entry = context.window.customCards[0];
+  assert.equal(entry.type, "sab-deluge-card");
+  assert.equal(entry.name, "SAB & Deluge Card");
+  assert.equal(entry.preview, true);
+  assert.ok(entry.description, "expected a picker description");
+  assert.ok(entry.documentationURL.startsWith("https://"), "expected a docs link");
+
+  // The picker looks for the element named after the type minus "custom:".
+  assert.ok(defined.has("sab-deluge-card"));
+  assert.ok(defined.has("sab-deluge-card-editor"));
+});
+
+test("the picker entry survives a custom element registration failure", () => {
+  // A stale copy of the card loaded from another resource would make define()
+  // throw. The picker entry must still be registered, and the reason logged.
+  const { context, errors } = runSource({ defineThrows: true });
+
+  assert.equal(context.window.customCards.length, 1);
+  assert.equal(context.window.customCards[0].type, "sab-deluge-card");
+  assert.equal(errors.length, 1, "expected the failure to be reported");
+});
+
+test("an existing customCards array is preserved, not clobbered", () => {
+  const defined = new Map();
+  const context = {
+    HTMLElement: FakeHTMLElement,
+    CustomEvent: class {},
+    customElements: {
+      define: (name, constructor) => defined.set(name, constructor),
+      get: (name) => defined.get(name),
+    },
+    document: { createElement: (name) => new FakeNode(name) },
+    window: { customCards: [{ type: "some-other-card" }] },
+    console: { info() {}, error() {} },
+    setInterval,
+    clearInterval,
+    setTimeout,
+    Promise,
+  };
+  vm.runInNewContext(source, context, { filename: "sab-deluge-card.js" });
+
+  assert.deepEqual(
+    context.window.customCards.map((card) => card.type),
+    ["some-other-card", "sab-deluge-card"],
+  );
 });
 
 test("Deluge filter keeps incomplete queue items and hides completed or seeding items", () => {

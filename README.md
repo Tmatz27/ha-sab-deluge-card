@@ -51,6 +51,55 @@ Use the dashboard visual editor and choose **SAB & Deluge Card**, or add:
 type: custom:sab-deluge-card
 ```
 
+## The card is not in the "Add card" list
+
+Work through these in order. Step 1 tells you which half of the problem you have.
+
+**1. Did the file load?** Open the browser console (F12 → Console) on a
+dashboard page and look for the version banner:
+
+```
+SAB & Deluge Card v0.1.1
+```
+
+- **Banner present** → the card is registered. Skip to step 4.
+- **Banner missing** → the browser never ran the file. Continue with step 2.
+
+**2. Is the resource registered?** Go to **Settings → Dashboards → ⋮ (top
+right) → Resources**. You need an entry of type **JavaScript Module**:
+
+```
+/hacsfiles/ha-sab-deluge-card/sab-deluge-card.js
+```
+
+If it is missing, add it with **+ Add Resource** using exactly that URL and the
+**JavaScript Module** type. HACS adds this automatically only for
+storage-mode dashboards.
+
+**3. Running Lovelace in YAML mode?** HACS cannot register the resource for
+you. Add it to `configuration.yaml` and restart:
+
+```yaml
+lovelace:
+  mode: yaml
+  resources:
+    - url: /hacsfiles/ha-sab-deluge-card/sab-deluge-card.js
+      type: module
+```
+
+**4. Clear the frontend cache.** The dashboard caches resources aggressively:
+
+- Desktop: hard refresh with `Ctrl+Shift+R` (`Cmd+Shift+R` on macOS)
+- Mobile app: **Settings → Companion App → Debugging → Reset frontend cache**,
+  then fully close and reopen the app
+
+**5. Search rather than scroll.** In the card picker, type `SAB` in the search
+box. Custom cards are grouped near the bottom of the list, below every built-in
+card, so they are easy to miss when scrolling.
+
+If the console shows an error mentioning `sab-deluge-card` instead of the
+version banner, please open an issue with that message.
+
 ## Configuration
 
 Every setting is available in the visual editor.
@@ -99,6 +148,27 @@ change ratios, or alter Deluge's own queue.
 - Deluge's trash button removes the torrent and deletes downloaded files.
 
 Both removal flows require an extra confirmation click.
+
+## Privacy and security
+
+- **No credentials in the card.** SABnzbd and Deluge secrets stay in Arr Stack
+  Integration's config entry. Every request goes to Home Assistant's own
+  authenticated `/api/arr_stack/...` proxy, which is served with
+  `requires_auth = True`.
+- **No telemetry.** The card sends no analytics and contacts no third party
+  other than the icon CDN below.
+- **One external request.** With `application_icons: real`, the two client
+  logos are fetched from `cdn.jsdelivr.net`. They are requested with
+  `referrerpolicy="no-referrer"`, so your Home Assistant URL is not sent, but
+  the request still reveals your IP address to the CDN. Set
+  `application_icons: mdi` to make the card fully self-contained with no
+  outbound requests.
+- **Download and torrent names are escaped** before rendering, so a crafted
+  release name cannot inject markup into the dashboard.
+- **No inline event handlers**, which keeps the card compatible with strict
+  Content-Security-Policy setups.
+- **Both removal actions require a second click** to confirm. Removing a
+  torrent with the trash button deletes its files on disk and cannot be undone.
 
 ## Development
 

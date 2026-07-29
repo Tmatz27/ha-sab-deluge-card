@@ -1,6 +1,6 @@
 /**
  * SAB & Deluge Card for Home Assistant
- * Version 0.1.0
+ * Version 0.1.1
  *
  * A focused download-queue card backed by martinargalas/arr-stack-integration.
  * The visual design is inspired by martinargalas/ha-arr-stack-card (MIT).
@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const SAB_DELUGE_CARD_VERSION = "0.1.0";
+const SAB_DELUGE_CARD_VERSION = "0.1.1";
 
 const DEFAULT_CONFIG = Object.freeze({
   show_total_speed: true,
@@ -843,7 +843,9 @@ class SabDelugeCard extends HTMLElement {
     if (this._config.application_icons === "mdi") {
       return `<ha-icon class="app-icon mdi-app-icon ${client}" icon="${MDI_ICONS[client]}"></ha-icon>`;
     }
-    return `<img class="app-icon" src="${APP_ICONS[client]}" alt="${APP_LABELS[client]}" data-app-fallback="${client}">`;
+    // no-referrer keeps the Home Assistant origin out of the CDN request.
+    // Switch application_icons to "mdi" to avoid the external request entirely.
+    return `<img class="app-icon" src="${APP_ICONS[client]}" alt="${APP_LABELS[client]}" referrerpolicy="no-referrer" data-app-fallback="${client}">`;
   }
 
   _wireEvents() {
@@ -1543,21 +1545,30 @@ class SabDelugeCard extends HTMLElement {
   }
 }
 
-if (!customElements.get("sab-deluge-card-editor")) {
-  customElements.define("sab-deluge-card-editor", SabDelugeCardEditor);
-}
-if (!customElements.get("sab-deluge-card")) {
-  customElements.define("sab-deluge-card", SabDelugeCard);
-}
-
+// Announce the card to the dashboard picker before defining the elements. This
+// is what makes "SAB & Deluge Card" appear under Add card, and doing it first
+// means a element-registration failure still leaves a visible entry plus a
+// console error, rather than the card silently missing from the picker.
 window.customCards = window.customCards || [];
-if (!window.customCards.some((card) => card.type === "sab-deluge-card")) {
+if (!window.customCards.some((card) => card?.type === "sab-deluge-card")) {
   window.customCards.push({
     type: "sab-deluge-card",
     name: "SAB & Deluge Card",
     description: "Live SABnzbd and Deluge queues without completed-history clutter",
     preview: true,
+    documentationURL: "https://github.com/Tmatz27/ha-sab-deluge-card",
   });
+}
+
+try {
+  if (!customElements.get("sab-deluge-card-editor")) {
+    customElements.define("sab-deluge-card-editor", SabDelugeCardEditor);
+  }
+  if (!customElements.get("sab-deluge-card")) {
+    customElements.define("sab-deluge-card", SabDelugeCard);
+  }
+} catch (error) {
+  console.error("SAB & Deluge Card could not register its custom elements", error);
 }
 
 console.info(

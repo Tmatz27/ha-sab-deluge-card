@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1
+
+- Register the card with the dashboard picker before defining its custom
+  elements, so a registration failure can no longer stop **SAB & Deluge Card**
+  from appearing under **Add card**
+- Report element-registration failures to the browser console instead of
+  failing silently
+- Add a documentation link to the card picker entry
+- Request client logos with `referrerpolicy="no-referrer"` so the Home
+  Assistant origin is not sent to the CDN
+- Document how to diagnose a card that does not appear in the picker
+
 ## 0.1.0
 
 - Initial HACS-ready release
