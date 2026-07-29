@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="SAB and Deluge Card for Home Assistant">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#26262b"/>
+      <stop offset="100%" stop-color="#1a1a1d"/>
+    </linearGradient>
+    <linearGradient id="down" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5bba56" stop-opacity=".92"/>
+      <stop offset="100%" stop-color="#3d903c" stop-opacity=".86"/>
+    </linearGradient>
+    <linearGradient id="up" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5895bb" stop-opacity=".92"/>
+      <stop offset="100%" stop-color="#3f6f92" stop-opacity=".86"/>
+    </linearGradient>
+    <radialGradient id="warm" cx="15%" cy="22%" r="55%">
+      <stop offset="0%" stop-color="#e7b84a" stop-opacity=".16"/>
+      <stop offset="100%" stop-color="#e7b84a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cool" cx="84%" cy="80%" r="55%">
+      <stop offset="0%" stop-color="#5376e0" stop-opacity=".20"/>
+      <stop offset="100%" stop-color="#5376e0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="320" rx="30" fill="url(#card)"/>
+  <rect width="1200" height="320" rx="30" fill="url(#warm)"/>
+  <rect width="1200" height="320" rx="30" fill="url(#cool)"/>
+  <rect x="1" y="1" width="1198" height="318" rx="29" fill="none" stroke="#ffffff" stroke-opacity=".14"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+    <text x="64" y="96" fill="#f5f5f7" font-size="46" font-weight="800">SAB &amp; Deluge Card</text>
+    <text x="64" y="134" fill="#a9a9b2" font-size="20" font-weight="500">Live SABnzbd and Deluge queues for Home Assistant — no completed history</text>
+
+    <!-- Speed pills -->
+    <g transform="translate(64,168)">
+      <rect width="196" height="46" rx="23" fill="url(#down)" stroke="#72de75" stroke-opacity=".62"/>
+      <path d="M28 15 v14 M21 23 l7 7 l7 -7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="31" fill="#ffffff" font-size="21" font-weight="700">28.4 MB/s</text>
+    </g>
+    <g transform="translate(276,168)">
+      <rect width="178" height="46" rx="23" fill="url(#up)" stroke="#74c4f8" stroke-opacity=".70"/>
+      <path d="M28 30 v-14 M21 22 l7 -7 l7 7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="52" y="31" fill="#ffffff" font-size="21" font-weight="700">3.1 MB/s</text>
+    </g>
+
+    <!-- Client rows -->
+    <g transform="translate(64,248)">
+      <text x="0" y="14" fill="#f1c84b" font-size="17" font-weight="800">SABnzbd</text>
+      <rect x="96" y="6" width="360" height="6" rx="3" fill="#ffffff" fill-opacity=".16"/>
+      <rect x="96" y="6" width="248" height="6" rx="3" fill="#73b2ff"/>
+      <text x="472" y="14" fill="#a9a9b2" font-size="15" font-weight="700">69%</text>
+    </g>
+    <g transform="translate(624,248)">
+      <text x="0" y="14" fill="#6f96ed" font-size="17" font-weight="800">Deluge</text>
+      <rect x="84" y="6" width="360" height="6" rx="3" fill="#ffffff" fill-opacity=".16"/>
+      <rect x="84" y="6" width="151" height="6" rx="3" fill="#73b2ff"/>
+      <text x="460" y="14" fill="#a9a9b2" font-size="15" font-weight="700">42%</text>
+    </g>
+  </g>
+</svg>

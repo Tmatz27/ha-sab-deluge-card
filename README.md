@@ -1,8 +1,12 @@
 # SAB & Deluge Card
 
+![SAB & Deluge Card](banner.svg)
+
 A focused Home Assistant Lovelace card for live SABnzbd and Deluge download
 queues. It keeps the visual style and useful controls of Arr Stack Card while
 removing the completed-history clutter.
+
+> The banner above is an illustration of the card's layout, not a screenshot.
 
 ## What this card does differently
 
