@@ -246,6 +246,7 @@ test("Deluge actions use the integration's expected action and id fields", async
   card._render = () => {};
   card._delay = async () => {};
   card._fetchData = async () => {};
+  card._describeFailure = (label, error) => `${label}: ${error}`;
 
   await card._delugeGlobal("global_pause");
   await card._delugeItem("pause", "torrent-hash");
@@ -284,6 +285,7 @@ test("SAB queue removal never targets history", async () => {
   card._render = () => {};
   card._delay = async () => {};
   card._fetchData = async () => {};
+  card._describeFailure = (label, error) => `${label}: ${error}`;
 
   await card._sabDelete("sab-id");
 
@@ -408,6 +410,105 @@ test("a pending removal confirmation is dropped when its target leaves the queue
   assert.equal(card._confirm, null);
 });
 
+test("a 503 is reported as unreachable, not as unconfigured", () => {
+  const card = Object.create(Card.prototype);
+
+  // Arr Stack Integration returns 503 with a localised message for a failed
+  // TCP connection. Calling that "not configured" sends the user to the wrong
+  // setting entirely, which is what this guards against.
+  const unreachable = card._describeFailure("Deluge", {
+    status_code: 503,
+    body: { error: "Nelze se připojit: Cannot connect to host 10.0.0.5:8112" },
+  });
+  assert.match(unreachable, /could not connect/i);
+  assert.doesNotMatch(unreachable, /not configured/i);
+
+  // Only the literal "not configured" body means a missing config entry.
+  const missing = card._describeFailure("SABnzbd", {
+    status_code: 503,
+    body: { error: "SABnzbd not configured" },
+  });
+  assert.match(missing, /not configured/i);
+  assert.doesNotMatch(missing, /could not connect/i);
+});
+
+test("failures name the client and surface the underlying message", () => {
+  const card = Object.create(Card.prototype);
+
+  assert.match(
+    card._describeFailure("SABnzbd", { status_code: 404, body: "" }),
+    /^SABnzbd: the arr_stack endpoint was not found/,
+  );
+  assert.match(
+    card._describeFailure("Deluge", { status_code: 500, body: { error: "boom" } }),
+    /^Deluge: boom$/,
+  );
+  // A body with no error key must still produce something actionable.
+  assert.match(
+    card._describeFailure("Deluge", { status_code: 500, body: { detail: "odd" } }),
+    /^Deluge: .*odd/,
+  );
+  assert.match(
+    card._describeFailure("SABnzbd", { status_code: 500 }),
+    /request failed with status 500/,
+  );
+});
+
+test("a silent Deluge auth failure is reported instead of looking idle", () => {
+  const card = Object.create(Card.prototype);
+  card._config = { show_deluge: true };
+  card._caps = { deluge: true };
+
+  // Integration ignores auth.login's result, so a bad password yields HTTP 200
+  // with an empty list and an empty transfer status.
+  card._delugeRaw = [];
+  card._delugeStatus = {};
+  assert.match(card._delugeSilentFailure(), /check the Deluge password/i);
+
+  // A genuinely idle daemon still answers with transfer fields.
+  card._delugeStatus = { download_rate: 0, upload_rate: 0 };
+  assert.equal(card._delugeSilentFailure(), "");
+
+  // Torrents present means the RPC clearly worked.
+  card._delugeStatus = {};
+  card._delugeRaw = [{ hash: "a" }];
+  assert.equal(card._delugeSilentFailure(), "");
+
+  // Nothing to say when Deluge is not configured or is hidden.
+  card._caps = { deluge: false };
+  card._delugeRaw = [];
+  assert.equal(card._delugeSilentFailure(), "");
+});
+
+test("one client failing does not discard the other client's data", async () => {
+  const card = Object.create(Card.prototype);
+  card._config = { show_sabnzbd: true, show_deluge: true, items_per_page: 3 };
+  card._caps = { sabnzbd: true, deluge: true };
+  card._pages = { sabnzbd: 0, deluge: 0 };
+  card._delugeSort = "progress_desc";
+  card._sab = {};
+  card._delugeRaw = [];
+  card._delugeStatus = {};
+  card._fetching = false;
+  card._render = () => {};
+  card._hass = {
+    async callApi(method, path) {
+      if (path === "arr_stack/sabnzbd/queue") {
+        return { queue: { kbpersec: "500", slots: [{ nzo_id: "a", filename: "Live job" }] } };
+      }
+      throw { status_code: 503, body: { error: "Nelze se připojit" } };
+    },
+  };
+
+  await card._fetchData();
+
+  assert.equal(card._sabSlots().length, 1, "expected SABnzbd data to survive");
+  assert.match(card._error, /Deluge is configured, but Home Assistant could not connect/);
+  assert.doesNotMatch(card._error, /SABnzbd/, "expected no SABnzbd failure reported");
+  // Both Deluge requests fail, but the banner must not repeat itself.
+  assert.equal(card._error.match(/could not connect/g).length, 1);
+});
+
 test("application logos point at the maintained dashboard-icons repository", () => {
   // The old walkxcode/dashboard-icons repository was transferred to
   // homarr-labs/dashboard-icons, so no CDN URL may still reference it.
@@ -426,5 +527,16 @@ test("card carries no embedded credentials and only calls the arr_stack proxy", 
   for (const endpoint of endpoints) {
     assert.ok(endpoint.startsWith("arr_stack/"), `unexpected endpoint: ${endpoint}`);
   }
-  assert.equal(/apikey|api_key|password|token/i.test(source), false);
+  // A hardcoded secret looks like an assignment or a query parameter. The bare
+  // words appear legitimately in help text such as "check the Deluge password".
+  assert.equal(
+    /(api_?key|password|passwd|token|secret)\s*[:=]\s*["'`][^"'`]{3,}["'`]/i.test(source),
+    false,
+    "found what looks like a hardcoded credential",
+  );
+  assert.equal(
+    /[?&](api_?key|token|password|passwd)=/i.test(source),
+    false,
+    "found a credential in a query string",
+  );
 });

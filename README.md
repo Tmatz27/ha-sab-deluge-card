@@ -59,7 +59,7 @@ Work through these in order. Step 1 tells you which half of the problem you have
 dashboard page and look for the version banner:
 
 ```
-SAB & Deluge Card v0.1.1
+SAB & Deluge Card v0.1.2
 ```
 
 - **Banner present** → the card is registered. Skip to step 4.

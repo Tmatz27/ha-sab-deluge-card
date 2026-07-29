@@ -1,6 +1,6 @@
 /**
  * SAB & Deluge Card for Home Assistant
- * Version 0.1.1
+ * Version 0.1.2
  *
  * A focused download-queue card backed by martinargalas/arr-stack-integration.
  * The visual design is inspired by martinargalas/ha-arr-stack-card (MIT).
@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const SAB_DELUGE_CARD_VERSION = "0.1.1";
+const SAB_DELUGE_CARD_VERSION = "0.1.2";
 
 const DEFAULT_CONFIG = Object.freeze({
   show_total_speed: true,
@@ -358,15 +358,30 @@ class SabDelugeCard extends HTMLElement {
   async _fetchData() {
     if (this._fetching || !this._hass) return;
     this._fetching = true;
+
+    const failures = [];
+    // Each request reports its own failure so one client going down never hides
+    // the other's data, and the banner can name which client actually broke.
+    const run = async (label, path, apply) => {
+      try {
+        apply(await this._hass.callApi("GET", path));
+      } catch (error) {
+        console.error(`SAB & Deluge Card: ${label} request to ${path} failed`, error);
+        failures.push(this._describeFailure(label, error));
+      }
+    };
+
     try {
       if (!this._caps) {
-        this._caps = await this._hass.callApi("GET", "arr_stack/capabilities/info");
+        await run("Arr Stack Integration", "arr_stack/capabilities/info", (data) => {
+          this._caps = data;
+        });
       }
 
       const tasks = [];
       if (this._caps?.sabnzbd && this._config.show_sabnzbd !== false) {
         tasks.push(
-          this._hass.callApi("GET", "arr_stack/sabnzbd/queue").then((data) => {
+          run("SABnzbd", "arr_stack/sabnzbd/queue", (data) => {
             if (data?.status === false) throw new Error(data.error || "SABnzbd returned an error");
             this._sab = data?.queue || {};
           }),
@@ -377,10 +392,10 @@ class SabDelugeCard extends HTMLElement {
 
       if (this._caps?.deluge && this._config.show_deluge !== false) {
         tasks.push(
-          this._hass.callApi("GET", "arr_stack/deluge/queue").then((data) => {
+          run("Deluge", "arr_stack/deluge/queue", (data) => {
             this._delugeRaw = Array.isArray(data) ? data : [];
           }),
-          this._hass.callApi("GET", "arr_stack/deluge/status").then((data) => {
+          run("Deluge", "arr_stack/deluge/status", (data) => {
             this._delugeStatus = data || {};
           }),
         );
@@ -389,12 +404,13 @@ class SabDelugeCard extends HTMLElement {
         this._delugeStatus = {};
       }
 
-      const results = await Promise.allSettled(tasks);
-      const rejected = results.find((result) => result.status === "rejected");
-      if (rejected) throw rejected.reason;
-      this._error = "";
-    } catch (error) {
-      this._error = this._friendlyError(error);
+      await Promise.all(tasks);
+
+      const silent = this._delugeSilentFailure();
+      if (silent) failures.push(silent);
+
+      // Both Deluge calls fail together, so collapse the duplicate message.
+      this._error = [...new Set(failures)].join(" ");
     } finally {
       this._fetching = false;
       this._clampPages();
@@ -402,16 +418,65 @@ class SabDelugeCard extends HTMLElement {
     }
   }
 
-  _friendlyError(error) {
-    const status = error?.status_code ?? error?.status ?? "";
-    const text = String(error?.message || error?.body || error || "Unable to load download data");
-    if (status === 404 || text.includes("404")) {
-      return "The Arr Stack Integration endpoint was not found. Update the integration and restart Home Assistant.";
+  /**
+   * Arr Stack Integration does not check Deluge's auth.login result. A wrong
+   * Deluge password therefore returns HTTP 200 with an empty torrent list and
+   * an empty transfer status instead of an error, which is indistinguishable
+   * from an idle daemon unless the missing transfer fields are checked.
+   */
+  _delugeSilentFailure() {
+    if (!this._caps?.deluge || this._config.show_deluge === false) return "";
+    const status = this._delugeStatus;
+    const answered = status && typeof status === "object" && "download_rate" in status;
+    if (answered || this._delugeRaw.length > 0) return "";
+    return "Deluge returned no data. If it has active torrents, check the Deluge password in Arr Stack Integration.";
+  }
+
+  _describeFailure(label, error) {
+    const status = error?.status_code ?? error?.status ?? 0;
+    const raw = this._errorText(error);
+
+    if (status === 404) {
+      return `${label}: the arr_stack endpoint was not found. Update Arr Stack Integration and restart Home Assistant.`;
     }
-    if (status === 503 || text.toLowerCase().includes("not configured")) {
-      return "SABnzbd or Deluge is not configured in the Arr Stack Integration.";
+    // Only the literal "not configured" body means the service is missing from
+    // the config entry. The integration also returns 503 for a failed TCP
+    // connection, with a localised message ("Nelze se pripojit" = cannot
+    // connect), and reporting that as "not configured" points at the wrong fix.
+    if (/not configured/i.test(raw)) {
+      return `${label} is not configured in Arr Stack Integration.`;
     }
-    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+    if (status === 503 || /nelze se p\W?ipojit|cannot connect|connect(ion)? (refused|error|timeout)/i.test(raw)) {
+      return `${label} is configured, but Home Assistant could not connect to it. Check its URL, port, and credentials in Arr Stack Integration.`;
+    }
+
+    const detail = raw.replace(/\s+/g, " ").trim();
+    if (!detail) return `${label}: request failed${status ? ` with status ${status}` : ""}.`;
+    return `${label}: ${detail.length > 140 ? `${detail.slice(0, 137)}...` : detail}`;
+  }
+
+  _errorText(error) {
+    if (!error) return "";
+    if (typeof error === "string") return error;
+
+    const body = error.body;
+    // Prefer the integration's own message over Home Assistant's generic
+    // "Response error: <status>" wrapper.
+    if (body && typeof body === "object" && typeof body.error === "string") return body.error;
+    if (typeof body === "string" && body) return body;
+    if (typeof error.message === "string" && error.message) return error.message;
+    if (typeof error.error === "string" && error.error) return error.error;
+    if (body && typeof body === "object") {
+      try {
+        const json = JSON.stringify(body);
+        return json === "{}" ? "" : json;
+      } catch {
+        return "";
+      }
+    }
+    // Never fall back to String(object): "[object Object]" tells nobody
+    // anything, and the caller reports the status code instead.
+    return "";
   }
 
   _sabSlots() {
@@ -926,7 +991,7 @@ class SabDelugeCard extends HTMLElement {
     });
   }
 
-  async _runAction(busyKey, callback) {
+  async _runAction(busyKey, label, callback) {
     if (!this._hass || this._busy.has(busyKey)) return;
     this._busy.add(busyKey);
     this._confirm = null;
@@ -939,7 +1004,8 @@ class SabDelugeCard extends HTMLElement {
       await this._delay(350);
       await this._fetchData();
     } catch (error) {
-      this._error = this._friendlyError(error);
+      console.error(`SAB & Deluge Card: ${label} action failed`, error);
+      this._error = this._describeFailure(label, error);
     } finally {
       this._busy.delete(busyKey);
       this._render();
@@ -951,13 +1017,13 @@ class SabDelugeCard extends HTMLElement {
   }
 
   async _sabGlobal(mode) {
-    return this._runAction("sab:global", () =>
+    return this._runAction("sab:global", "SABnzbd", () =>
       this._hass.callApi("POST", "arr_stack/sabnzbd/action", { mode }),
     );
   }
 
   async _sabDelete(id) {
-    return this._runAction(`sab:${id}`, () =>
+    return this._runAction(`sab:${id}`, "SABnzbd", () =>
       this._hass.callApi("POST", "arr_stack/sabnzbd/action", {
         mode: "queue",
         name: "delete",
@@ -967,13 +1033,13 @@ class SabDelugeCard extends HTMLElement {
   }
 
   async _delugeGlobal(action) {
-    return this._runAction("deluge:global", () =>
+    return this._runAction("deluge:global", "Deluge", () =>
       this._hass.callApi("POST", "arr_stack/deluge/action", { action }),
     );
   }
 
   async _delugeItem(action, id) {
-    return this._runAction(`deluge:${id}`, () =>
+    return this._runAction(`deluge:${id}`, "Deluge", () =>
       this._hass.callApi("POST", "arr_stack/deluge/action", { action, id }),
     );
   }

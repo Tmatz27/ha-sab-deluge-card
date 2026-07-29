@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.2
+
+- Stop reporting every HTTP 503 as "SABnzbd or Deluge is not configured". Arr
+  Stack Integration also returns 503 when Home Assistant cannot open a
+  connection, so the card now distinguishes an unreachable client from a
+  missing configuration and says which one it is
+- Name the failing client in the error banner and show the message the
+  integration actually returned, instead of a fixed guess
+- Report a failure per request, so one client being down no longer hides the
+  other client's data or masks a second error
+- Detect a Deluge password failure. Arr Stack Integration does not check
+  Deluge's `auth.login` result, so bad credentials return an empty torrent list
+  with HTTP 200; the card now flags that instead of showing an idle queue
+- Log the underlying error to the browser console for every failed request
+- Stop rendering `[object Object]` when an error carries no readable message
+
 ## 0.1.1
 
 - Register the card with the dashboard picker before defining its custom
