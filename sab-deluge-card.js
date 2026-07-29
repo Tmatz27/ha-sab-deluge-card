@@ -1,6 +1,6 @@
 /**
  * SAB & Deluge Card for Home Assistant
- * Version 0.1.2
+ * Version 0.1.3
  *
  * A focused download-queue card backed by martinargalas/arr-stack-integration.
  * The visual design is inspired by martinargalas/ha-arr-stack-card (MIT).
@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const SAB_DELUGE_CARD_VERSION = "0.1.2";
+const SAB_DELUGE_CARD_VERSION = "0.1.3";
 
 const DEFAULT_CONFIG = Object.freeze({
   show_total_speed: true,
@@ -753,19 +753,29 @@ class SabDelugeCard extends HTMLElement {
   }
 
   _renderDelugeSection() {
+    const known = Array.isArray(this._delugeRaw) ? this._delugeRaw : [];
     const torrents = this._filterDeluge();
     const pageData = this._page(torrents, "deluge");
-    const visibleActive = torrents.some((torrent) => {
-      const state = String(torrent?.state || "").toLowerCase();
-      return state !== "paused" && state !== "error";
-    });
     const hasTransfer = numberValue(this._delugeStatus?.download_rate) > 0 || numberValue(this._delugeStatus?.upload_rate) > 0;
-    const allPaused = torrents.length > 0 && !visibleActive && !hasTransfer;
+    // Deluge's global pause stops every torrent, including the completed ones
+    // this card hides, so the whole daemon view decides the button state. Using
+    // only the visible rows made the button offer Pause on an already-paused
+    // Deluge whenever the incomplete queue happened to be empty.
+    const allPaused = known.length > 0
+      && known.every((torrent) => String(torrent?.state || "").toLowerCase() === "paused")
+      && !hasTransfer;
     const [sortField, sortDirection] = this._delugeSort.split("_");
     const sortArrow = sortDirection === "asc" ? "↑" : "↓";
+    const hidden = known.length - torrents.length;
     const items = pageData.items.length
       ? pageData.items.map((torrent) => this._renderDelugeItem(torrent)).join("")
-      : this._queueEmpty("No active or queued Deluge torrents");
+      : this._queueEmpty(
+        // Say when the queue is empty *because* everything finished, so an
+        // empty section is never mistaken for the card failing to load data.
+        hidden > 0
+          ? `No downloads in progress · ${hidden} completed or seeding ${hidden === 1 ? "torrent" : "torrents"} hidden`
+          : "No active or queued Deluge torrents",
+      );
 
     return `
       <section class="client-section deluge-section">
@@ -1119,42 +1129,43 @@ class SabDelugeCard extends HTMLElement {
       }
       .speed-card {
         position: relative;
-        margin-bottom: 18px;
-        padding: 16px 18px;
+        margin-bottom: 14px;
+        padding: 11px 14px;
         overflow: hidden;
         border: 1px solid var(--sd-border);
-        border-radius: 21px;
+        border-radius: 16px;
         background:
           linear-gradient(120deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .035)),
           color-mix(in srgb, var(--sd-surface-2) 78%, transparent);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
       }
       .speed-title {
-        margin-bottom: 8px;
-        font-size: 14px;
-        font-weight: 800;
-        letter-spacing: .02em;
+        margin-bottom: 7px;
+        color: var(--sd-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .07em;
       }
       .speed-pills {
         display: flex;
         flex-wrap: wrap;
-        gap: 9px;
+        gap: 7px;
       }
       .speed-pill {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        min-height: 35px;
-        padding: 5px 13px;
+        gap: 5px;
+        min-height: 26px;
+        padding: 3px 10px;
         border: 1px solid;
         border-radius: 999px;
         color: #fff;
-        font-size: 16px;
+        font-size: 13px;
         line-height: 1;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
       }
       .speed-pill ha-icon {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 14px;
       }
       .speed-pill.download {
         border-color: rgba(114, 222, 117, .65);
@@ -1165,9 +1176,9 @@ class SabDelugeCard extends HTMLElement {
         background: linear-gradient(180deg, rgba(88, 149, 187, .82), rgba(63, 111, 146, .76));
       }
       .speed-subtitle {
-        margin-top: 9px;
-        color: var(--sd-text);
-        font-size: 13px;
+        margin-top: 7px;
+        color: var(--sd-muted);
+        font-size: 11px;
       }
       .client-section {
         position: relative;
@@ -1543,7 +1554,7 @@ class SabDelugeCard extends HTMLElement {
         }
         .speed-card {
           margin-inline: 4px;
-          padding: 14px;
+          padding: 10px 12px;
         }
         .client-header {
           gap: 8px;

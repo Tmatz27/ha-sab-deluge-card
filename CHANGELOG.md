@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+- Say how many torrents were filtered out when the Deluge section is empty, so
+  "everything finished" is no longer indistinguishable from "no data loaded"
+- Base the Deluge global pause button on every torrent the daemon reports
+  rather than only the visible ones. It previously offered Pause on an
+  already-paused Deluge whenever the incomplete queue was empty
+- Shrink the total speed panel: smaller title, pills, icons, and padding
+
 ## 0.1.2
 
 - Stop reporting every HTTP 503 as "SABnzbd or Deluge is not configured". Arr

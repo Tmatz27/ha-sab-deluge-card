@@ -232,6 +232,64 @@ test("Deluge renderer cannot surface a completed torrent", () => {
   assert.doesNotMatch(html, /Hidden completed item/);
 });
 
+test("an empty queue says when torrents were filtered out", () => {
+  const card = Object.create(Card.prototype);
+  card._config = { allow_controls: true, application_icons: "mdi", items_per_page: 3 };
+  card._delugeSort = "progress_desc";
+  card._pages = { deluge: 0 };
+  card._busy = new Set();
+  card._confirm = null;
+  card._delugeStatus = { download_rate: 0, upload_rate: 0 };
+
+  // Deluge holds only finished torrents: the section is empty because
+  // everything completed, not because the card failed to load data.
+  card._delugeRaw = [
+    { hash: "done", name: "Finished", state: "Paused", progress: 100 },
+    { hash: "seed", name: "Seeding", state: "Seeding", progress: 100 },
+  ];
+  let html = card._renderDelugeSection();
+  assert.match(html, /2 completed or seeding torrents hidden/);
+  assert.doesNotMatch(html, /Finished|Seeding<\/span>/);
+
+  // Singular reads correctly.
+  card._delugeRaw = [{ hash: "done", name: "Finished", state: "Paused", progress: 100 }];
+  html = card._renderDelugeSection();
+  assert.match(html, /1 completed or seeding torrent hidden/);
+
+  // A genuinely empty daemon keeps the plain message.
+  card._delugeRaw = [];
+  html = card._renderDelugeSection();
+  assert.match(html, /No active or queued Deluge torrents/);
+  assert.doesNotMatch(html, /hidden/);
+});
+
+test("global pause state considers hidden torrents too", () => {
+  const card = Object.create(Card.prototype);
+  card._config = { allow_controls: true, application_icons: "mdi", items_per_page: 3 };
+  card._delugeSort = "progress_desc";
+  card._pages = { deluge: 0 };
+  card._busy = new Set();
+  card._confirm = null;
+  card._delugeStatus = { download_rate: 0, upload_rate: 0 };
+
+  // Every torrent is paused but all are filtered out of the visible list.
+  // The button must still offer Resume rather than Pause.
+  card._delugeRaw = [{ hash: "done", name: "Finished", state: "Paused", progress: 100 }];
+  let html = card._renderDelugeSection();
+  assert.match(html, /data-deluge-global="global_resume"/);
+
+  // A running torrent means Deluge is not paused.
+  card._delugeRaw.push({ hash: "live", name: "Active", state: "Downloading", progress: 10 });
+  html = card._renderDelugeSection();
+  assert.match(html, /data-deluge-global="global_pause"/);
+
+  // Transfer activity overrides a stale set of paused states.
+  card._delugeRaw = [{ hash: "done", name: "Finished", state: "Paused", progress: 100 }];
+  card._delugeStatus = { download_rate: 0, upload_rate: 4096 };
+  html = card._renderDelugeSection();
+  assert.match(html, /data-deluge-global="global_pause"/);
+});
+
 test("Deluge actions use the integration's expected action and id fields", async () => {
   const card = Object.create(Card.prototype);
   const calls = [];
